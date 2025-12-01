@@ -38,7 +38,7 @@ npm run build
     - Switch to a session (Enter)
     - Rename a session (Cmd+R)
     - Delete a session (Ctrl+D)
-    - Create a new session (Cmd+N)
+    - Create a new session (Ctrl+N)
 4. In session details, manage windows:
     - Switch to specific windows
     - Rename windows
