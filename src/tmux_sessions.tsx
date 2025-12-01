@@ -22,6 +22,7 @@ type SessionInfo = {
   created: string;
   currentWindow: string;
   paneCount: number;
+  lastAttached: number; // Added to track usage time
 };
 
 type WindowInfo = {
@@ -63,17 +64,12 @@ export default function TmuxSessions() {
   const { push } = useNavigation();
 
   const loadSessions = useCallback(() => {
-    // We don't set isLoading(true) here to avoid flickering during auto-refresh
-    // or immediate updates after actions.
-
-    // DELIMITER: Using '|||' to separate fields safely
-    // Format: name ||| windows ||| attached ||| created ||| active_window_name ||| panes
+    // Format: name ||| windows ||| attached ||| created ||| active_window_name ||| panes ||| last_attached
     const format =
-      "#{session_name}|||#{session_windows}|||#{session_attached}|||#{session_created}|||#{window_name}|||#{session_panes}";
+      "#{session_name}|||#{session_windows}|||#{session_attached}|||#{session_created}|||#{window_name}|||#{session_panes}|||#{session_last_attached}";
 
     exec(`tmux list-sessions -F "${format}" 2>/dev/null`, (error, stdout) => {
       if (error) {
-        // Likely no server running or no sessions
         setSessions([]);
         setIsLoading(false);
         return;
@@ -90,6 +86,8 @@ export default function TmuxSessions() {
           const created = parts[3];
           const currentWindow = parts[4];
           const paneCount = parseInt(parts[5]) || 0;
+          // session_last_attached might be empty if never attached
+          const lastAttached = parseInt(parts[6]) || 0;
 
           return {
             name,
@@ -98,8 +96,19 @@ export default function TmuxSessions() {
             created,
             currentWindow,
             paneCount,
+            lastAttached,
           };
         });
+
+      // SORTING LOGIC:
+      // 1. Attached sessions first
+      // 2. Most recently attached (descending time)
+      parsedSessions.sort((a, b) => {
+        if (a.attached !== b.attached) {
+          return a.attached ? -1 : 1; // Attached goes first
+        }
+        return b.lastAttached - a.lastAttached; // Newer timestamp goes first
+      });
 
       setSessions(parsedSessions);
       setIsLoading(false);
@@ -108,13 +117,12 @@ export default function TmuxSessions() {
 
   useEffect(() => {
     loadSessions();
-    const interval = setInterval(loadSessions, 5000); // Increased refresh rate to 5s
+    const interval = setInterval(loadSessions, 5000);
     return () => clearInterval(interval);
   }, [loadSessions]);
 
   const switchToSession = async (sessionName: string) => {
     try {
-      // Switch client and immediately refresh the list to update "Attached" status
       await runCommand(`tmux switch-client -t ${sessionName}`);
       showToast({ title: `Switched to ${sessionName}` });
       loadSessions();
@@ -173,6 +181,20 @@ export default function TmuxSessions() {
               tintColor: session.attached ? Color.Green : Color.SecondaryText,
             }}
             accessories={[
+              {
+                text: session.lastAttached
+                  ? new Date(session.lastAttached * 1000).toLocaleDateString(
+                      undefined,
+                      {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    )
+                  : "",
+                tooltip: "Last attached",
+              },
               { text: session.attached ? "Attached" : "Detached" },
               ...(session.currentWindow
                 ? [{ icon: Icon.Window, text: session.currentWindow }]
@@ -236,7 +258,6 @@ function WindowList({ sessionName }: { sessionName: string }) {
   const { push } = useNavigation();
 
   const loadWindows = useCallback(() => {
-    // Format: id ||| index ||| name ||| active_flag ||| layout
     const format =
       "#{window_id}|||#{window_index}|||#{window_name}|||#{window_active}|||#{window_layout}";
 
@@ -271,7 +292,6 @@ function WindowList({ sessionName }: { sessionName: string }) {
 
   useEffect(() => {
     loadWindows();
-    // Refresh windows periodically in case active window changes externally
     const interval = setInterval(loadWindows, 2000);
     return () => clearInterval(interval);
   }, [loadWindows]);
@@ -280,7 +300,7 @@ function WindowList({ sessionName }: { sessionName: string }) {
     try {
       await runCommand(`tmux switch-client -t ${windowId}`);
       showToast({ title: `Switched to ${windowName}` });
-      loadWindows(); // Refresh immediately to show checkmark
+      loadWindows();
     } catch (e) {
       handleError("Failed to switch window", e);
     }
