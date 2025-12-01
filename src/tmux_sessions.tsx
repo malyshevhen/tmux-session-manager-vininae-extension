@@ -25,8 +25,8 @@ type SessionInfo = {
 };
 
 type WindowInfo = {
-  id: string; // Unique ID (e.g. @1)
-  index: string; // Ordered index (e.g. 1)
+  id: string;
+  index: string;
   name: string;
   active: boolean;
   layout: string;
@@ -63,79 +63,62 @@ export default function TmuxSessions() {
   const { push } = useNavigation();
 
   const loadSessions = useCallback(() => {
-    setIsLoading(true);
-    // Get basic session list
-    exec(
-      "tmux list-sessions 2>/dev/null | awk '{print $1}' | sed 's/://'",
-      (error, stdout) => {
-        if (error) {
-          // If no server running or no sessions, standard error
-          setSessions([]);
-          setIsLoading(false);
-          return;
-        }
+    // We don't set isLoading(true) here to avoid flickering during auto-refresh
+    // or immediate updates after actions.
 
-        const sessionNames = stdout
-          .trim()
-          .split("\n")
-          .filter((s) => s.length > 0);
+    // DELIMITER: Using '|||' to separate fields safely
+    // Format: name ||| windows ||| attached ||| created ||| active_window_name ||| panes
+    const format =
+      "#{session_name}|||#{session_windows}|||#{session_attached}|||#{session_created}|||#{window_name}|||#{session_panes}";
 
-        // Load details for each session
-        const sessionPromises = sessionNames.map((sessionName) => {
-          return new Promise<SessionInfo>((resolve) => {
-            // Format: attached(0/1), created(timestamp), active_window_name, num_panes, num_windows
-            exec(
-              `tmux display-message -p -t ${sessionName} "#{session_attached},#{session_created},#{window_name},#{session_panes},#{session_windows}" 2>/dev/null`,
-              (detailError, detailStdout) => {
-                let attached = false;
-                let created = "";
-                let currentWindow = "";
-                let paneCount = 0;
-                let windowCount = 0;
+    exec(`tmux list-sessions -F "${format}" 2>/dev/null`, (error, stdout) => {
+      if (error) {
+        // Likely no server running or no sessions
+        setSessions([]);
+        setIsLoading(false);
+        return;
+      }
 
-                if (!detailError && detailStdout.trim()) {
-                  const details = detailStdout.trim().split(",");
-                  attached = details[0] === "1";
-                  created = details[1] || "";
-                  currentWindow = details[2] || "";
-                  paneCount = parseInt(details[3]) || 0;
-                  windowCount = parseInt(details[4]) || 0;
-                }
+      const lines = stdout.trim().split("\n");
+      const parsedSessions: SessionInfo[] = lines
+        .filter((line) => line.trim().length > 0)
+        .map((line) => {
+          const parts = line.split("|||");
+          const name = parts[0];
+          const windowCount = parseInt(parts[1]) || 0;
+          const attached = parts[2] === "1";
+          const created = parts[3];
+          const currentWindow = parts[4];
+          const paneCount = parseInt(parts[5]) || 0;
 
-                resolve({
-                  name: sessionName,
-                  windowCount,
-                  attached,
-                  created,
-                  currentWindow,
-                  paneCount,
-                });
-              },
-            );
-          });
+          return {
+            name,
+            windowCount,
+            attached,
+            created,
+            currentWindow,
+            paneCount,
+          };
         });
 
-        Promise.all(sessionPromises).then((sessionInfos) => {
-          setSessions(sessionInfos);
-          setIsLoading(false);
-        });
-      },
-    );
+      setSessions(parsedSessions);
+      setIsLoading(false);
+    });
   }, []);
 
   useEffect(() => {
     loadSessions();
-    const interval = setInterval(loadSessions, 10000); // Auto-refresh
+    const interval = setInterval(loadSessions, 5000); // Increased refresh rate to 5s
     return () => clearInterval(interval);
   }, [loadSessions]);
 
   const switchToSession = async (sessionName: string) => {
     try {
+      // Switch client and immediately refresh the list to update "Attached" status
       await runCommand(`tmux switch-client -t ${sessionName}`);
-      showToast({ title: `Switched to session ${sessionName}` });
+      showToast({ title: `Switched to ${sessionName}` });
+      loadSessions();
     } catch (e) {
-      // Fallback: if we are not in tmux, maybe we can't switch-client.
-      // But typically this extension assumes tmux usage.
       handleError("Failed to switch session", e);
     }
   };
@@ -253,10 +236,12 @@ function WindowList({ sessionName }: { sessionName: string }) {
   const { push } = useNavigation();
 
   const loadWindows = useCallback(() => {
-    setIsLoading(true);
-    // Format: id, index, name, active_flag, layout
+    // Format: id ||| index ||| name ||| active_flag ||| layout
+    const format =
+      "#{window_id}|||#{window_index}|||#{window_name}|||#{window_active}|||#{window_layout}";
+
     exec(
-      `tmux list-windows -t ${sessionName} -F "#{window_id},#{window_index},#{window_name},#{window_active},#{window_layout}" 2>/dev/null`,
+      `tmux list-windows -t ${sessionName} -F "${format}" 2>/dev/null`,
       (error, stdout) => {
         if (error) {
           handleError("Error loading windows", error);
@@ -266,15 +251,15 @@ function WindowList({ sessionName }: { sessionName: string }) {
 
         const lines = stdout.trim().split("\n");
         const parsedWindows: WindowInfo[] = lines
-          .filter((l) => l.length > 0)
+          .filter((l) => l.trim().length > 0)
           .map((line) => {
-            const [id, index, name, active, layout] = line.split(",");
+            const parts = line.split("|||");
             return {
-              id,
-              index,
-              name,
-              active: active === "1",
-              layout,
+              id: parts[0],
+              index: parts[1],
+              name: parts[2],
+              active: parts[3] === "1",
+              layout: parts[4],
             };
           });
 
@@ -286,13 +271,16 @@ function WindowList({ sessionName }: { sessionName: string }) {
 
   useEffect(() => {
     loadWindows();
+    // Refresh windows periodically in case active window changes externally
+    const interval = setInterval(loadWindows, 2000);
+    return () => clearInterval(interval);
   }, [loadWindows]);
 
   const switchToWindow = async (windowId: string, windowName: string) => {
     try {
-      // 'switch-client' makes the client actually jump to the target session/window
       await runCommand(`tmux switch-client -t ${windowId}`);
       showToast({ title: `Switched to ${windowName}` });
+      loadWindows(); // Refresh immediately to show checkmark
     } catch (e) {
       handleError("Failed to switch window", e);
     }
@@ -420,7 +408,6 @@ function CreateSessionForm({ onCreate }: { onCreate: () => void }) {
               }
 
               const dir = values.directory?.trim() || "~";
-              // Basic escaping for directory path
               const escapedDir = dir.replace(/(["'$`\\])/g, "\\$1");
 
               try {
@@ -571,7 +558,6 @@ function RenameWindowForm({
               }
 
               try {
-                // Use windowId for reliable renaming
                 await runCommand(
                   `tmux rename-window -t ${windowId} ${newName}`,
                 );
