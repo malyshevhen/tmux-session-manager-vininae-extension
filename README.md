@@ -47,8 +47,77 @@ npm run build
 - **Session Renaming**: Rename sessions with a simple form interface
 - **Session Deletion**: Remove unwanted sessions with confirmation
 - **Error Handling**: Provides user feedback for all operations
-If you want to build the production bundle, simply run:
+- **Auto-refresh**: Automatically updates session list every 10 seconds
+- **Confirmation dialogs**: Confirms destructive actions like session deletion
 
-```bash
-npm run build
+## Roadmap
+
+### High Priority Features
+
+#### 1. **Window Management**
+- View window details (panes, layout, activity)
+- Create new windows in existing sessions
+- Rename/delete windows
+- Switch to specific windows
+
+#### 2. **Session Templates/Presets**
+- Save common session configurations
+- Quick-create with predefined window layouts
+- Favorite directories for common projects
+
+#### 3. **Advanced Search & Filtering**
+- Filter by attachment status (attached/detached)
+- Filter by window count or pane count
+- Search within window names
+- Sort by creation time, name, or activity
+
+### Medium Priority Features
+
+#### 4. **Session Groups/Workspaces**
 ```
+Project Alpha
+├── alpha-dev (3 windows)
+├── alpha-test (1 window)
+└── alpha-prod (2 windows)
+
+Project Beta
+├── beta-api (2 windows)
+└── beta-web (4 windows)
+```
+
+#### 5. **Pane Management**
+- View pane contents/layout in sessions
+- Send commands to specific panes
+- Split panes, resize panes
+- Pane navigation shortcuts
+
+#### 6. **Session Monitoring**
+- Show active processes in sessions
+- CPU/memory usage per session
+- Session uptime and activity indicators
+- Alert for crashed/disconnected sessions
+
+### Advanced Features
+
+#### 7. **Integration Features**
+- **Project Detection**: Auto-suggest session names based on current directory
+- **Git Integration**: Create sessions based on git branches
+- **Docker Integration**: Sessions for containerized workflows
+- **SSH Integration**: Remote TMUX session management
+
+#### 8. **Session Backup/Restore**
+- Export session configurations
+- Import and recreate complex session layouts
+- Backup running sessions before system updates
+
+#### 9. **Multi-Session Operations**
+- Bulk rename sessions with patterns
+- Move windows between sessions
+- Merge sessions
+- Session templates with variables
+
+#### 10. **Customization & Preferences**
+- Custom keyboard shortcuts
+- Default session creation options
+- Theme preferences (colors for different session types)
+- Notification preferences

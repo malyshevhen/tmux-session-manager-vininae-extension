@@ -1,5 +1,5 @@
-import { Action, ActionPanel, Icon, List, showToast, Form, useNavigation } from "@vicinae/api";
-import { useEffect, useState } from "react";
+import { Action, ActionPanel, Icon, List, showToast, Form, useNavigation, confirmAlert } from "@vicinae/api";
+import { useEffect, useState, useCallback } from "react";
 import { exec } from "child_process";
 
 type SessionInfo = {
@@ -16,7 +16,7 @@ export default function TmuxSessions() {
 	const [isLoading, setIsLoading] = useState(true);
 	const { push } = useNavigation();
 
-	const loadSessions = () => {
+	const loadSessions = useCallback(() => {
 		setIsLoading(true);
 		exec("tmux list-sessions 2>/dev/null | awk '{print $1}' | sed 's/://'", (error, stdout) => {
 			if (error) {
@@ -69,11 +69,16 @@ export default function TmuxSessions() {
 				setIsLoading(false);
 			});
 		});
-	};
+	}, []);
 
 	useEffect(() => {
 		loadSessions();
-	}, []);
+
+		// Auto-refresh every 10 seconds
+		const interval = setInterval(loadSessions, 10000);
+
+		return () => clearInterval(interval);
+	}, [loadSessions]);
 
 	const switchToSession = (session: SessionInfo) => {
 		exec(`tmux switch -t ${session.name}`, (error) => {
@@ -85,7 +90,17 @@ export default function TmuxSessions() {
 		});
 	};
 
-	const deleteSession = (session: SessionInfo) => {
+	const deleteSession = async (session: SessionInfo) => {
+		const confirmed = await confirmAlert({
+			title: "Delete Session",
+			message: `Are you sure you want to delete the session "${session.name}"? This action cannot be undone.`,
+			primaryAction: {
+				title: "Delete"
+			}
+		});
+
+		if (!confirmed) return;
+
 		exec(`tmux kill-session -t ${session.name}`, (error) => {
 			if (error) {
 				showToast({ title: "Failed to delete session", message: error.message });
@@ -112,6 +127,16 @@ export default function TmuxSessions() {
 		<List
 			isLoading={isLoading}
 			searchBarPlaceholder="Search TMUX sessions..."
+			actions={
+				<ActionPanel>
+					<Action
+						title="Refresh Sessions"
+						icon={Icon.ArrowClockwise}
+						onAction={loadSessions}
+						shortcut={{ modifiers: ["cmd"], key: "r" }}
+					/>
+				</ActionPanel>
+			}
 		>
 			<List.Section title="TMUX Sessions">
 				{sessions.map((session) => (
@@ -201,6 +226,22 @@ export default function TmuxSessions() {
 function CreateSessionForm({ onCreate }: { onCreate: () => void }) {
 	const { pop } = useNavigation();
 
+	const validateSessionName = (name: string): boolean => {
+		if (!name || name.trim().length === 0) {
+			showToast({ title: "Session name is required" });
+			return false;
+		}
+		if (name.includes(' ') || name.includes('\t')) {
+			showToast({ title: "Session name cannot contain spaces" });
+			return false;
+		}
+		if (name.length > 50) {
+			showToast({ title: "Session name is too long (max 50 characters)" });
+			return false;
+		}
+		return true;
+	};
+
 	return (
 		<Form
 			actions={
@@ -208,11 +249,10 @@ function CreateSessionForm({ onCreate }: { onCreate: () => void }) {
 					<Action.SubmitForm
 						title="Create Session"
 						onSubmit={(values) => {
-							const sessionName = (values as any).name?.trim();
-							const directory = (values as any).directory?.trim() || "~";
+							const sessionName = (values as { name?: string; directory?: string }).name?.trim();
+							const directory = (values as { name?: string; directory?: string }).directory?.trim() || "~";
 
-							if (!sessionName) {
-								showToast({ title: "Session name is required" });
+							if (!validateSessionName(sessionName || '')) {
 								return;
 							}
 
@@ -246,6 +286,22 @@ function CreateSessionForm({ onCreate }: { onCreate: () => void }) {
 function RenameSessionForm({ currentName, onRename }: { currentName: string; onRename: () => void }) {
 	const { pop } = useNavigation();
 
+	const validateSessionName = (name: string): boolean => {
+		if (!name || name.trim().length === 0) {
+			showToast({ title: "New session name is required" });
+			return false;
+		}
+		if (name.includes(' ') || name.includes('\t')) {
+			showToast({ title: "Session name cannot contain spaces" });
+			return false;
+		}
+		if (name.length > 50) {
+			showToast({ title: "Session name is too long (max 50 characters)" });
+			return false;
+		}
+		return true;
+	};
+
 	return (
 		<Form
 			actions={
@@ -253,10 +309,9 @@ function RenameSessionForm({ currentName, onRename }: { currentName: string; onR
 					<Action.SubmitForm
 						title="Rename Session"
 						onSubmit={(values) => {
-							const newName = (values as any).name?.trim();
+							const newName = (values as { name?: string }).name?.trim();
 
-							if (!newName) {
-								showToast({ title: "New session name is required" });
+							if (!validateSessionName(newName || '')) {
 								return;
 							}
 
