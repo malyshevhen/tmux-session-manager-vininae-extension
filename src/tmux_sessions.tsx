@@ -233,6 +233,12 @@ export default function TmuxSessions() {
             onAction={loadSessions}
             shortcut={{ modifiers: ["cmd"], key: "r" }}
           />
+          <Action
+            title="Create New Session"
+            icon={Icon.Plus}
+            onAction={() => push(<CreateSessionForm onCreate={loadSessions} />)}
+            shortcut={{ modifiers: ["ctrl"], key: "n" }}
+          />
         </ActionPanel>
       }
     >
@@ -370,22 +376,6 @@ export default function TmuxSessions() {
             }
           />
         ))}
-        <List.Item
-          title="Create New Session"
-          icon={Icon.Plus}
-          actions={
-            <ActionPanel>
-              <Action
-                title="Create Session"
-                onAction={() =>
-                  push(<CreateSessionForm onCreate={loadSessions} />)
-                }
-                icon={Icon.Plus}
-                shortcut={{ modifiers: ["ctrl"], key: "n" }}
-              />
-            </ActionPanel>
-          }
-        />
       </List.Section>
     </List>
   );
