@@ -11,6 +11,27 @@ type SessionInfo = {
 	paneCount: number;
 };
 
+const createNewWindow = (sessionName: string, windowName: string) => {
+	exec(`tmux new-window -t ${sessionName} -n ${windowName}`, (error) => {
+		if (error) {
+			showToast({ title: "Failed to create window", message: error.message });
+		} else {
+			showToast({ title: `Created window ${windowName}` });
+		}
+	});
+};
+
+const renameWindow = (sessionName: string, oldName: string, newName: string, onComplete: () => void) => {
+	exec(`tmux rename-window -t ${sessionName}:${oldName} ${newName}`, (error) => {
+		if (error) {
+			showToast({ title: "Failed to rename window", message: error.message });
+		} else {
+			showToast({ title: `Renamed window to ${newName}` });
+			onComplete();
+		}
+	});
+};
+
 export default function TmuxSessions() {
 	const [sessions, setSessions] = useState<SessionInfo[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -123,6 +144,37 @@ export default function TmuxSessions() {
 		});
 	};
 
+	const switchToWindow = (sessionName: string, windowName: string) => {
+		exec(`tmux select-window -t ${sessionName}:${windowName}`, (error) => {
+			if (error) {
+				showToast({ title: "Failed to switch window", message: error.message });
+			} else {
+				showToast({ title: `Switched to window ${windowName}` });
+			}
+		});
+	};
+
+	const deleteWindow = async (sessionName: string, windowName: string, onComplete: () => void) => {
+		const confirmed = await confirmAlert({
+			title: "Delete Window",
+			message: `Are you sure you want to delete window "${windowName}" from session "${sessionName}"?`,
+			primaryAction: { title: "Delete" }
+		});
+
+		if (!confirmed) return;
+
+		exec(`tmux kill-window -t ${sessionName}:${windowName}`, (error) => {
+			if (error) {
+				showToast({ title: "Failed to delete window", message: error.message });
+			} else {
+				showToast({ title: `Deleted window ${windowName}` });
+				onComplete();
+			}
+		});
+	};
+
+
+
 	return (
 		<List
 			isLoading={isLoading}
@@ -173,9 +225,43 @@ export default function TmuxSessions() {
 											<List.Item
 												key={index}
 												title={window}
+												subtitle={window === session.currentWindow ? "Current" : undefined}
 												icon={Icon.Window}
+												actions={
+													<ActionPanel>
+														<Action
+															title="Switch to Window"
+															onAction={() => switchToWindow(session.name, window)}
+															icon={Icon.ArrowRight}
+														/>
+														<Action
+															title="Rename Window"
+															onAction={() => push(<RenameWindowForm sessionName={session.name} currentName={window} onRename={loadSessions} />)}
+															icon={Icon.Pencil}
+														/>
+														<Action
+															title="Delete Window"
+															onAction={() => deleteWindow(session.name, window, loadSessions)}
+															icon={Icon.Trash}
+															style={Action.Style.Destructive}
+														/>
+													</ActionPanel>
+												}
 											/>
 										))}
+										<List.Item
+											title="Create New Window"
+											icon={Icon.Plus}
+											actions={
+												<ActionPanel>
+													<Action
+														title="Create Window"
+														onAction={() => push(<CreateWindowForm sessionName={session.name} onCreate={loadSessions} />)}
+														icon={Icon.Plus}
+													/>
+												</ActionPanel>
+											}
+										/>
 									</List.Section>
 								)}
 							</List>
@@ -337,6 +423,98 @@ function RenameSessionForm({ currentName, onRename }: { currentName: string; onR
 			<Form.TextField
 				id="name"
 				title="New Session Name"
+			/>
+		</Form>
+	);
+}
+
+function CreateWindowForm({ sessionName, onCreate }: { sessionName: string; onCreate: () => void }) {
+	const { pop } = useNavigation();
+
+	const validateWindowName = (name: string): boolean => {
+		if (!name || name.trim().length === 0) {
+			showToast({ title: "Window name is required" });
+			return false;
+		}
+		if (name.length > 50) {
+			showToast({ title: "Window name is too long (max 50 characters)" });
+			return false;
+		}
+		return true;
+	};
+
+	return (
+		<Form
+			actions={
+				<ActionPanel>
+					<Action.SubmitForm
+						title="Create Window"
+						onSubmit={(values) => {
+							const windowName = (values as { name?: string }).name?.trim();
+
+							if (!validateWindowName(windowName || '')) {
+								return;
+							}
+
+							createNewWindow(sessionName, windowName || '');
+							onCreate();
+							pop();
+						}}
+					/>
+				</ActionPanel>
+			}
+		>
+			<Form.TextField
+				id="name"
+				title="Window Name"
+			/>
+		</Form>
+	);
+}
+
+function RenameWindowForm({ sessionName, currentName, onRename }: { sessionName: string; currentName: string; onRename: () => void }) {
+	const { pop } = useNavigation();
+
+	const validateWindowName = (name: string): boolean => {
+		if (!name || name.trim().length === 0) {
+			showToast({ title: "New window name is required" });
+			return false;
+		}
+		if (name.length > 50) {
+			showToast({ title: "Window name is too long (max 50 characters)" });
+			return false;
+		}
+		return true;
+	};
+
+	return (
+		<Form
+			actions={
+				<ActionPanel>
+					<Action.SubmitForm
+						title="Rename Window"
+						onSubmit={(values) => {
+							const newName = (values as { name?: string }).name?.trim();
+
+							if (!validateWindowName(newName || '')) {
+								return;
+							}
+
+							if (newName === currentName) {
+								showToast({ title: "New name must be different from current name" });
+								return;
+							}
+
+							renameWindow(sessionName, currentName, newName || '', onRename);
+							pop();
+						}}
+					/>
+				</ActionPanel>
+			}
+		>
+			<Form.TextField
+				id="name"
+				title="New Window Name"
 			/>
 		</Form>
 	);

@@ -8,6 +8,7 @@ A Vicinae extension for managing TMUX sessions. This extension allows you to:
 - **Switch** to existing TMUX sessions
 - **Rename** TMUX sessions
 - **Delete** TMUX sessions
+- **Manage Windows**: Create, rename, delete, and switch windows within sessions
 
 ## Installation
 
@@ -34,10 +35,15 @@ npm run build
 1. Launch the extension from Vicinae
 2. View all existing TMUX sessions
 3. Use the action panel to:
-   - Switch to a session (Enter)
-   - Rename a session (Cmd+R)
-   - Delete a session (Cmd+Delete)
-   - Create a new session (Cmd+N)
+    - Switch to a session (Enter)
+    - Rename a session (Cmd+R)
+    - Delete a session (Ctrl+D)
+    - Create a new session (Cmd+N)
+4. In session details, manage windows:
+    - Switch to specific windows
+    - Rename windows
+    - Delete windows
+    - Create new windows
 
 ## Features
 
@@ -46,6 +52,7 @@ npm run build
 - **Session Switching**: Quickly switch between existing sessions
 - **Session Renaming**: Rename sessions with a simple form interface
 - **Session Deletion**: Remove unwanted sessions with confirmation
+- **Window Management**: Create, rename, delete, and switch windows within sessions
 - **Error Handling**: Provides user feedback for all operations
 - **Auto-refresh**: Automatically updates session list every 10 seconds
 - **Confirmation dialogs**: Confirms destructive actions like session deletion
@@ -54,7 +61,7 @@ npm run build
 
 ### High Priority Features
 
-#### 1. **Window Management**
+#### ✅ 1. **Window Management** (Implemented)
 - View window details (panes, layout, activity)
 - Create new windows in existing sessions
 - Rename/delete windows
